@@ -6,21 +6,20 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// === Connection string (Render: usar env var ConnectionStrings__Default)
+// ===== Connection string (Render: usa env var ConnectionStrings__Default) =====
 var connectionString =
     builder.Configuration.GetConnectionString("Default") ??
     Environment.GetEnvironmentVariable("ConnectionStrings__Default") ??
     "Host=localhost;Port=5432;Database=creditapp;Username=postgres;Password=postgres";
 
-// === DbContext (PostgreSQL)
-builder.Services.AddDbContext<CreditAppDbContext>(opt =>
-    opt.UseNpgsql(connectionString));
+// ===== DbContext (PostgreSQL) =====
+builder.Services.AddDbContext<CreditAppDbContext>(opt => opt.UseNpgsql(connectionString));
 
-// === Swagger
+// ===== Swagger =====
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// === CORS (origen del front)
+// ===== CORS =====
 var corsOrigin =
     builder.Configuration["Cors:Origin"] ??
     Environment.GetEnvironmentVariable("CORS_ORIGIN") ??
@@ -35,26 +34,17 @@ builder.Services.AddCors(o =>
         .AllowCredentials());
 });
 
-// === JSON (camelCase + enums como string)
+// ===== JSON options =====
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
     o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
-// ================== BUILD ==================
 var app = builder.Build();
-
-// Ejecutar migraciones al arrancar (si no hay, crea esquema)
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<CreditAppDbContext>();
-    try { db.Database.Migrate(); }
-    catch { db.Database.EnsureCreated(); }
-}
-
 app.UseCors("app");
 
+// (Opcional) mostrar Swagger también en prod: cambia la condición si lo quieres visible
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -176,5 +166,12 @@ audit.MapPost("/", async (AuditLog a, CreditAppDbContext db) =>
     await db.SaveChangesAsync();
     return Results.Created($"/api/audit/{a.Id}", a);
 });
+
+// ===== Auto-migración al arrancar (aplica "InitialCreate" en Render) =====
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<CreditAppDbContext>();
+    db.Database.Migrate();
+}
 
 app.Run();
